@@ -1,9 +1,12 @@
 import CanvasKitInit, { CanvasKit, Surface, Canvas } from 'canvaskit-wasm'
+import { CanvasKitRegistry } from '@/utils/canvasKitRegistry'
 
 // Глобальные переменные
 let surface: Surface | null = null
 let CanvasKit: CanvasKit | null = null
 let skiaCanvas: HTMLCanvasElement | null = null
+
+const skiaRegistry = new CanvasKitRegistry()
 
 // Параметры canvas
 const canvasWidth = window.innerWidth / 2 - 20
@@ -28,7 +31,9 @@ export const initSkia = async () => {
         skiaCanvas.style.border = '1px solid #ccc'
 
         // Очищаем контейнер и добавляем canvas
-        skiaCanvas.remove()
+        if (skiaCanvas.parentNode) {
+            skiaCanvas.remove()
+        }
         container.appendChild(skiaCanvas)
     }
 
@@ -37,6 +42,7 @@ export const initSkia = async () => {
         CanvasKit = await CanvasKitInit({
             locateFile: (file: string) => `/node_modules/canvaskit-wasm/bin/${file}`,
         })
+        skiaRegistry.init(CanvasKit)
     }
 
     // Создаём Surface если ещё не создан
@@ -53,12 +59,20 @@ export const initSkia = async () => {
 
 // Очистка Skia ресурсов
 export const cleanupSkia = () => {
+    // Очищаем все зарегистрированные объекты
+    skiaRegistry.cleanupAll()
+
     if (surface) {
         surface.delete()
         surface = null
     }
+
+    if (skiaCanvas && skiaCanvas.parentNode) {
+        skiaCanvas.remove()
+        skiaCanvas = null
+    }
+
     // CanvasKit нельзя удалить, так как это глобальный объект
-    skiaCanvas = null
 }
 
 // Рендер контента на Skia canvas
@@ -87,17 +101,17 @@ export const renderSkiaCanvas = async () => {
 // Функция для рисования простых объектов
 function drawSimpleObjects(CanvasKit: CanvasKit, canvas: Canvas) {
     // 1. Рисуем красный квадрат
-    const redPaint = new CanvasKit.Paint()
+    const redPaint = skiaRegistry.createPaint()
     redPaint.setColor(CanvasKit.RED)
     redPaint.setAntiAlias(true)
     redPaint.setStyle(CanvasKit.PaintStyle.Fill)
 
     // Квадрат: x=50, y=50, width=150, height=150
-    const rect = CanvasKit.XYWHRect(50, 50, 150, 150)
+    const rect = skiaRegistry.createRect(50, 50, 150, 150)
     canvas.drawRect(rect, redPaint)
 
     // 2. Рисуем синий круг
-    const bluePaint = new CanvasKit.Paint()
+    const bluePaint = skiaRegistry.createPaint()
     bluePaint.setColor(CanvasKit.BLUE)
     bluePaint.setAntiAlias(true)
     bluePaint.setStyle(CanvasKit.PaintStyle.Fill)
@@ -106,7 +120,7 @@ function drawSimpleObjects(CanvasKit: CanvasKit, canvas: Canvas) {
     canvas.drawCircle(300, 125, 75, bluePaint)
 
     // 3. Рисуем жёлтую рамку вокруг квадрата (обводка)
-    const yellowPaint = new CanvasKit.Paint()
+    const yellowPaint = skiaRegistry.createPaint()
     yellowPaint.setColor(CanvasKit.Color(255, 255, 0, 255)) // Жёлтый
     yellowPaint.setAntiAlias(true)
     yellowPaint.setStyle(CanvasKit.PaintStyle.Stroke)
@@ -114,10 +128,12 @@ function drawSimpleObjects(CanvasKit: CanvasKit, canvas: Canvas) {
 
     canvas.drawRect(rect, yellowPaint)
 
-    // Очищаем ресурсы (важно для предотвращения утечек памяти)
-    redPaint.delete()
-    bluePaint.delete()
-    yellowPaint.delete()
+    // Удаляем созданные объекты из реестра
+    skiaRegistry.remove(redPaint)
+    skiaRegistry.remove(bluePaint)
+    skiaRegistry.remove(yellowPaint)
+    skiaRegistry.remove(rect)
+    checkSkiaMemoryLeaks()
 }
 
 // Опционально: ресайз canvas при изменении окна
@@ -141,4 +157,63 @@ export const resizeSkiaCanvas = async () => {
         // Перерисовываем контент
         await renderSkiaCanvas()
     }
+}
+
+// Внешняя функция для глобальной проверки
+export const checkSkiaMemoryLeaks = () => {
+    const stats = skiaRegistry.checkRemainingObjects()
+
+    console.group('🔍 Skia Memory Leak Check')
+    console.log('📊 Total tracked objects:', stats.total)
+    console.log('🎨 Paints:', stats.paints)
+    console.log('🛤️ Paths:', stats.paths)
+    console.log('🔤 Fonts:', stats.fonts)
+    console.log('🖼️ Images:', stats.images)
+    console.log('💿 Surfaces:', stats.surfaces)
+    console.log('❓ Others:', stats.others)
+
+    if (stats.total > 0) {
+        console.warn('⚠️ Potential memory leaks detected!')
+        console.table(stats.details.map(d => ({ type: d.type })))
+    } else {
+        console.log('✅ No memory leaks detected')
+    }
+    console.groupEnd()
+
+    return stats
+}
+
+// Функция для принудительной очистки и проверки
+export const forceCleanupAndCheck = () => {
+    console.log('🧹 Starting forced cleanup...')
+
+    // 1. Очищаем реестр
+    const cleanupResult = skiaRegistry.forceCleanupAll()
+    console.log(`✅ Deleted: ${cleanupResult.deleted} objects`)
+    if (cleanupResult.failed.length > 0) {
+        console.warn('❌ Failed to delete:', cleanupResult.failed)
+    }
+
+    // 2. Проверяем Surface
+    if (surface) {
+        try {
+            surface.delete()
+            surface = null
+            console.log('✅ Surface deleted')
+        } catch (e) {
+            console.error('❌ Failed to delete surface:', e)
+        }
+    }
+
+    // 3. Проверяем, что осталось в реестре
+    const remaining = skiaRegistry.checkRemainingObjects()
+
+    if (remaining.total === 0) {
+        console.log('✨ Cleanup complete! No objects remaining.')
+    } else {
+        console.warn(`⚠️ ${remaining.total} objects still remain after cleanup!`)
+        console.table(remaining.details)
+    }
+
+    return remaining
 }
