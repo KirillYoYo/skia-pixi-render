@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js-legacy'
-import { getPixiContent } from '@/renderMethods'
+import { getPixiContent } from '@/pixiContent'
+import { getGraphicsAndSpritesFlat, renderPixiObjectsToSkia } from '@/renderSkiaCanvas'
 
 // 1) Создаём Application и указываем, чтобы canvas помещался в наш div
 const app = new PIXI.Application({
@@ -13,9 +14,11 @@ export const renderCanvases = (pixiContainer: PIXI.Container) => {
     // Добавляем контейнер на сцену
     app.stage.removeChildren()
     app.stage.addChild(pixiContainer)
+    /**/
+    renderPixiObjectsToSkia(getGraphicsAndSpritesFlat(pixiContainer))
 }
 
-export function renderPixiCanvas() {
+export function initPixiCanvas() {
     const container = document.getElementById('pixi-canvas')
 
     if (container) {
@@ -26,12 +29,10 @@ export function renderPixiCanvas() {
         // Pixi сам создаст canvas; мы его вставляем в div
         container.appendChild(app.view as unknown as Node)
     }
-
-    renderCanvases(getPixiContent())
 }
 
 // Функция для ресайза Pixi canvas
-export const resizePixiCanvas = () => {
+export const resizePixiCanvas = async () => {
     const newWidth = window.innerWidth / 2 - 20
     const newHeight = window.innerHeight / 2 - 20
 
@@ -46,5 +47,6 @@ export const resizePixiCanvas = () => {
     }
 
     // Перерисовываем контент с новым размером
-    renderCanvases(getPixiContent())
+    const content = await getPixiContent()
+    renderCanvases(content)
 }
