@@ -14,6 +14,31 @@ const skiaRegistry = new CanvasKitRegistry()
 const canvasWidth = window.innerWidth / 2 - 20
 const canvasHeight = window.innerHeight / 2 - 20
 
+interface ClickableArea {
+    id: string
+    originalObject: PIXI.DisplayObject
+    callback: (event: PIXI.FederatedPointerEvent) => void
+    // Сохраняем мировую трансформацию объекта
+    worldTransform: PIXI.Matrix
+    // Сохраняем все геометрические данные фигуры
+    shapes: Array<{
+        type: number
+        data: any // данные формы (rect, circle, poly и т.д.)
+        fillStyle: any
+        lineStyle: any
+    }>
+    // Сохраняем локальные границы для быстрого отсечения
+    localBounds: PIXI.Rectangle
+}
+
+// Глобальный массив кликабельных областей
+const clickableAreas: ClickableArea[] = []
+
+// Очищать при каждом рендере
+const clearClickableAreas = () => {
+    clickableAreas.length = 0
+}
+
 // Инициализация Skia
 export const initSkia = async () => {
     // Получаем контейнер
@@ -37,6 +62,15 @@ export const initSkia = async () => {
             skiaCanvas.remove()
         }
         container.appendChild(skiaCanvas)
+
+        if (skiaCanvas) {
+            skiaCanvas.onclick = e => {
+                const rect = skiaCanvas!.getBoundingClientRect()
+                const x = e.clientX - rect.left
+                const y = e.clientY - rect.top
+                handleClick(x, y)
+            }
+        }
     }
 
     // Инициализируем CanvasKit если ещё не инициализирован
@@ -218,6 +252,8 @@ export const renderPixiObjectsToSkia = async (pixiObjects: SkiaRenderable) => {
     // Очищаем canvas (заливаем белым фоном)
     canvas.clear(CanvasKit.WHITE)
 
+    clearClickableAreas()
+
     // Рендерим каждый объект
     pixiObjects.forEach(data => {
         const { pixiObject, offset } = data
@@ -226,7 +262,8 @@ export const renderPixiObjectsToSkia = async (pixiObjects: SkiaRenderable) => {
         }
 
         if (pixiObject instanceof PIXI.Graphics) {
-            renderPixiGraphics(pixiObject, CanvasKit, canvas, offset)
+            const id = crypto.randomUUID()
+            renderPixiGraphics(pixiObject, CanvasKit, canvas, offset, id)
         } else if (pixiObject instanceof PIXI.Sprite) {
             renderPixiSprite(pixiObject, CanvasKit, canvas, offset)
         }
@@ -241,17 +278,41 @@ function renderPixiGraphics(
     graphics: PIXI.Graphics,
     CanvasKit: CanvasKit,
     canvas: Canvas,
-    offset: [number, number]
+    offset: [number, number],
+    id: string
 ) {
     // Сохраняем текущее состояние canvas
     canvas.save()
 
     // Применяем трансформации (позиция, угол, масштаб)
-    // todo
     applyTransformations(graphics, canvas, offset)
 
     // Получаем данные рисования из Graphics
     const graphicsData = graphics.geometry.graphicsData
+
+    const shapes: ClickableArea['shapes'] = []
+    const worldTransform = graphics.transform.worldTransform.clone()
+
+    clickableAreas.push({
+        id: id,
+        originalObject: graphics,
+        callback: (event: PIXI.FederatedPointerEvent) => {
+            graphics.emit('pointerdown', event)
+            graphics.emit('pointerup', event)
+            console.log(`Clicked on graphics ${id}`)
+        },
+        worldTransform: worldTransform,
+        shapes: shapes,
+        localBounds: graphics.getLocalBounds(),
+    })
+    graphicsData.forEach(data => {
+        shapes.push({
+            type: data.shape.type,
+            data: data.shape,
+            fillStyle: data.fillStyle,
+            lineStyle: data.lineStyle,
+        })
+    })
 
     graphicsData.forEach(data => {
         const { shape, fillStyle, lineStyle } = data
@@ -343,8 +404,6 @@ function renderPixiSprite(
         // todo проверить tintColor
         // Для tint используем цветовую матрицу или смешивание
         const tintColor = sprite.tint
-        console.log('t of', typeof tintColor)
-        console.log('t of', tintColor)
         const r = ((Number(tintColor) >> 16) & 0xff) / 255
         const g = ((Number(tintColor) >> 8) & 0xff) / 255
         const b = (Number(tintColor) & 0xff) / 255
@@ -467,4 +526,153 @@ function drawShape(shape: any, canvas: Canvas, paint: any, CanvasKit: CanvasKit)
         )
         canvas.drawRRect(rrect, paint)
     }
+}
+
+const handleClick = (x: number, y: number) => {
+    // Идем с конца (верхние объекты)
+    for (let i = clickableAreas.length - 1; i >= 0; i--) {
+        const area = clickableAreas[i]
+
+        // Быстрая проверка по bounding box
+        if (area.localBounds) {
+            const localPoint = globalToLocal(x, y, area.worldTransform, [0, 0])
+
+            // Проверяем bounding box
+            if (
+                localPoint.x < area.localBounds.x ||
+                localPoint.x > area.localBounds.x + area.localBounds.width ||
+                localPoint.y < area.localBounds.y ||
+                localPoint.y > area.localBounds.y + area.localBounds.height
+            ) {
+                continue // Пропускаем, если не попали в bounding box
+            }
+        }
+
+        // Точная проверка по всем формам объекта
+        for (const shape of area.shapes) {
+            const localPoint = globalToLocal(x, y, area.worldTransform, [0, 0])
+
+            if (pointInShape(localPoint, shape.data)) {
+                // @ts-ignore need EventBoundary argument
+                const event = new PIXI.FederatedPointerEvent()
+                area.callback(event)
+                return // Нашли, выходим
+            }
+        }
+    }
+}
+
+const globalToLocal = (
+    globalX: number,
+    globalY: number,
+    worldTransform: PIXI.Matrix,
+    offset: [number, number]
+): PIXI.Point => {
+    // Создаем обратную матрицу трансформации
+    const inverseTransform = worldTransform.clone().invert()
+
+    // Преобразуем точку с учетом offset
+    const point = inverseTransform.apply({
+        x: globalX - offset[0],
+        y: globalY - offset[1],
+    })
+
+    return new PIXI.Point(point.x, point.y)
+}
+// Проверка попадания точки в форму (в локальных координатах объекта)
+const pointInShape = (localPoint: PIXI.Point, shape: any): boolean => {
+    switch (shape.type) {
+        case PIXI.SHAPES.RECT:
+            return (
+                localPoint.x >= shape.x &&
+                localPoint.x <= shape.x + shape.width &&
+                localPoint.y >= shape.y &&
+                localPoint.y <= shape.y + shape.height
+            )
+
+        case PIXI.SHAPES.CIRC:
+            const dx = localPoint.x - shape.x
+            const dy = localPoint.y - shape.y
+            return dx * dx + dy * dy <= shape.radius * shape.radius
+
+        case PIXI.SHAPES.ELIP:
+            // Для эллипса нормализуем координаты
+            const nx = (localPoint.x - shape.x) / shape.width
+            const ny = (localPoint.y - shape.y) / shape.height
+            return nx * nx + ny * ny <= 1
+
+        case PIXI.SHAPES.POLY:
+            return pointInPolygon(localPoint, shape.points)
+
+        case PIXI.SHAPES.RREC:
+            return pointInRRect(localPoint, shape)
+
+        default:
+            return false
+    }
+}
+
+// Проверка попадания в полигон (алгоритм ray casting)
+const pointInPolygon = (point: PIXI.Point, vertices: number[]): boolean => {
+    let inside = false
+    for (let i = 0, j = vertices.length - 2; i < vertices.length; i += 2) {
+        const xi = vertices[i],
+            yi = vertices[i + 1]
+        const xj = vertices[j],
+            yj = vertices[j + 1]
+
+        const intersect =
+            yi > point.y != yj > point.y && point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi
+
+        if (intersect) inside = !inside
+        j = i
+    }
+    return inside
+}
+
+const pointInRRect = (
+    point: PIXI.Point,
+    rrect: any // shape.type === PIXI.SHAPES.RREC
+): boolean => {
+    const { x, y, width, height, radius } = rrect
+
+    // Быстрая проверка: если точка вне bounding box
+    if (point.x < x || point.x > x + width || point.y < y || point.y > y + height) {
+        return false
+    }
+
+    // Проверяем углы (где есть скругления)
+    const radiusX = Math.min(radius, width / 2)
+    const radiusY = Math.min(radius, height / 2)
+
+    // Левый верхний угол
+    if (point.x < x + radiusX && point.y < y + radiusY) {
+        const dx = point.x - (x + radiusX)
+        const dy = point.y - (y + radiusY)
+        return dx * dx + dy * dy <= radiusX * radiusY
+    }
+
+    // Правый верхний угол
+    if (point.x > x + width - radiusX && point.y < y + radiusY) {
+        const dx = point.x - (x + width - radiusX)
+        const dy = point.y - (y + radiusY)
+        return dx * dx + dy * dy <= radiusX * radiusY
+    }
+
+    // Левый нижний угол
+    if (point.x < x + radiusX && point.y > y + height - radiusY) {
+        const dx = point.x - (x + radiusX)
+        const dy = point.y - (y + height - radiusY)
+        return dx * dx + dy * dy <= radiusX * radiusY
+    }
+
+    // Правый нижний угол
+    if (point.x > x + width - radiusX && point.y > y + height - radiusY) {
+        const dx = point.x - (x + width - radiusX)
+        const dy = point.y - (y + height - radiusY)
+        return dx * dx + dy * dy <= radiusX * radiusY
+    }
+
+    // Если точка не в углах - она внутри
+    return true
 }
