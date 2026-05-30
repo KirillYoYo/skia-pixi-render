@@ -10,12 +10,11 @@ const app = new PIXI.Application({
     forceCanvas: true,
 })
 
-export const renderCanvases = (pixiContainer: PIXI.Container) => {
-    // Добавляем контейнер на сцену
+export const renderCanvases = async (pixiContainer: PIXI.Container) => {
     app.stage.removeChildren()
     app.stage.addChild(pixiContainer)
-    /**/
-    renderPixiObjectsToSkia(getGraphicsAndSpritesFlat(pixiContainer))
+
+    await renderPixiObjectsToSkia(getGraphicsAndSpritesFlat(pixiContainer))
 }
 
 export function initPixiCanvas() {

@@ -1,12 +1,17 @@
 import { initPixiCanvas, renderCanvases, resizePixiCanvas } from '@/renderPixiCanvas'
-import { resizeSkiaCanvas } from '@/renderSkiaCanvas'
+import { exportSkiaCanvasToPdf, resizeSkiaCanvas } from '@/renderSkiaCanvas'
 import { getPixiContent } from '@/pixiContent'
+;(async () => {
+    initPixiCanvas()
+    const content = await getPixiContent()
+    renderCanvases(content)
 
-initPixiCanvas()
-const content = await getPixiContent()
-renderCanvases(content)
+    document.getElementById('export-pdf-btn')?.addEventListener('click', () => {
+        void exportSkiaCanvasToPdf()
+    })
 
-window.addEventListener('resize', () => {
-    resizeSkiaCanvas()
-    resizePixiCanvas()
-})
+    // window.addEventListener('resize', () => {
+    //     resizeSkiaCanvas()
+    //     resizePixiCanvas()
+    // })
+})()

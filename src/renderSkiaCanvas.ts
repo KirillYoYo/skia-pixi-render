@@ -1,12 +1,23 @@
-import CanvasKitInit, { CanvasKit, Surface, Canvas, Image } from 'canvaskit-wasm'
+import type { Canvas, CanvasKit, Image, SkPicture, Surface } from 'canvaskit-wasm'
+import { getCanvasKitWasmUrl, loadCanvasKitInit } from '@/loadCanvasKit'
 import { CanvasKitRegistry } from '@/utils/canvasKitRegistry'
 import * as PIXI from 'pixi.js-legacy'
 import { SkiaRenderable } from '@/types'
 
 // Глобальные переменные
 let surface: Surface | null = null
-let CanvasKit: CanvasKit | null = null
+let CanvasKit: (CanvasKit & { PdfDocument?: new (title?: string) => PdfDocumentLike }) | null = null
 let skiaCanvas: HTMLCanvasElement | null = null
+/** Запись команд Skia для экспорта в PDF (вариант SkPicture). */
+let lastSkiaPicture: SkPicture | null = null
+
+/** Минимальная типизация PdfDocument (libs/canvaskit с skia_enable_pdf). */
+interface PdfDocumentLike {
+    beginPage(width: number, height: number): Canvas
+    endPage(): void
+    close(): Uint8Array
+    delete(): void
+}
 
 const skiaRegistry = new CanvasKitRegistry()
 
@@ -73,10 +84,12 @@ export const initSkia = async () => {
         }
     }
 
-    // Инициализируем CanvasKit если ещё не инициализирован
+    // CanvasKit из libs/ (нужен PdfDocument для экспорта)
     if (!CanvasKit) {
+        const CanvasKitInit = await loadCanvasKitInit()
+        const wasmUrl = getCanvasKitWasmUrl()
         CanvasKit = await CanvasKitInit({
-            locateFile: (file: string) => `/node_modules/canvaskit-wasm/bin/${file}`,
+            locateFile: (file: string) => (file.endsWith('.wasm') ? wasmUrl : wasmUrl),
         })
         skiaRegistry.init(CanvasKit)
     }
@@ -97,6 +110,11 @@ export const initSkia = async () => {
 export const cleanupSkia = () => {
     // Очищаем все зарегистрированные объекты
     skiaRegistry.cleanupAll()
+
+    if (lastSkiaPicture) {
+        lastSkiaPicture.delete()
+        lastSkiaPicture = null
+    }
 
     if (surface) {
         surface.delete()
@@ -238,6 +256,7 @@ export const forceCleanupAndCheck = () => {
 
 // Функция для рендеринга Pixi объектов через Skia
 export const renderPixiObjectsToSkia = async (pixiObjects: SkiaRenderable) => {
+    cleanupSkia()
     // Проверяем инициализацию
     if (!CanvasKit || !surface) {
         const initialized = await initSkia()
@@ -271,6 +290,73 @@ export const renderPixiObjectsToSkia = async (pixiObjects: SkiaRenderable) => {
 
     // Отправляем изменения на экран
     surface.flush()
+
+    recordSkiaPicture(pixiObjects)
+    checkSkiaMemoryLeaks()
+}
+
+/** Только геометрия Graphics на canvas (без clickableAreas). Для SkPicture. */
+function paintPixiGraphicsOnCanvas(
+    graphics: PIXI.Graphics,
+    CanvasKit: CanvasKit,
+    canvas: Canvas,
+    offset: [number, number]
+) {
+    canvas.save()
+    applyTransformations(graphics, canvas, offset)
+
+    const graphicsData = graphics.geometry.graphicsData
+    graphicsData.forEach(data => {
+        const { shape, fillStyle, lineStyle } = data
+
+        if (fillStyle && fillStyle.visible && fillStyle.color !== undefined) {
+            const fillPaint = createFillPaint(CanvasKit, fillStyle)
+            drawShape(shape, canvas, fillPaint, CanvasKit)
+            fillPaint.delete()
+        }
+
+        if (
+            lineStyle &&
+            lineStyle.visible &&
+            lineStyle.color !== undefined &&
+            lineStyle.width > 0
+        ) {
+            const strokePaint = createStrokePaint(CanvasKit, lineStyle)
+            drawShape(shape, canvas, strokePaint, CanvasKit)
+            strokePaint.delete()
+        }
+    })
+
+    canvas.restore()
+}
+
+/** Второй проход: те же объекты → SkPicture (для PDF). Вызывается из renderPixiObjectsToSkia. */
+function recordSkiaPicture(pixiObjects: SkiaRenderable) {
+    if (!CanvasKit || !skiaCanvas) {
+        return
+    }
+
+    const w = skiaCanvas.width
+    const h = skiaCanvas.height
+    const recorder = new CanvasKit.PictureRecorder()
+    const recordCanvas = recorder.beginRecording(CanvasKit.XYWHRect(0, 0, w, h))
+
+    recordCanvas.clear(CanvasKit.WHITE)
+
+    pixiObjects.forEach(data => {
+        const { pixiObject, offset } = data
+        if (pixiObject instanceof PIXI.Graphics) {
+            paintPixiGraphicsOnCanvas(pixiObject, CanvasKit as CanvasKit, recordCanvas, offset)
+        } else if (pixiObject instanceof PIXI.Sprite) {
+            renderPixiSprite(pixiObject, CanvasKit as CanvasKit, recordCanvas, offset)
+        }
+    })
+
+    const picture = recorder.finishRecordingAsPicture()
+    recorder.delete()
+
+    lastSkiaPicture?.delete()
+    lastSkiaPicture = picture
 }
 
 // Рендеринг PIXI.Graphics
@@ -281,15 +367,9 @@ function renderPixiGraphics(
     offset: [number, number],
     id: string
 ) {
-    // Сохраняем текущее состояние canvas
-    canvas.save()
+    paintPixiGraphicsOnCanvas(graphics, CanvasKit, canvas, offset)
 
-    // Применяем трансформации (позиция, угол, масштаб)
-    applyTransformations(graphics, canvas, offset)
-
-    // Получаем данные рисования из Graphics
     const graphicsData = graphics.geometry.graphicsData
-
     const shapes: ClickableArea['shapes'] = []
     const worldTransform = graphics.transform.worldTransform.clone()
 
@@ -313,32 +393,6 @@ function renderPixiGraphics(
             lineStyle: data.lineStyle,
         })
     })
-
-    graphicsData.forEach(data => {
-        const { shape, fillStyle, lineStyle } = data
-
-        // Рисуем заливку
-        if (fillStyle && fillStyle.visible && fillStyle.color !== undefined) {
-            const fillPaint = createFillPaint(CanvasKit, fillStyle)
-            drawShape(shape, canvas, fillPaint, CanvasKit)
-            fillPaint.delete()
-        }
-
-        // Рисуем обводку
-        if (
-            lineStyle &&
-            lineStyle.visible &&
-            lineStyle.color !== undefined &&
-            lineStyle.width > 0
-        ) {
-            const strokePaint = createStrokePaint(CanvasKit, lineStyle)
-            drawShape(shape, canvas, strokePaint, CanvasKit)
-            strokePaint.delete()
-        }
-    })
-
-    // Восстанавливаем состояние canvas
-    canvas.restore()
 }
 
 // Рендеринг PIXI.Sprite
@@ -675,4 +729,41 @@ const pointInRRect = (
 
     // Если точка не в углах - она внутри
     return true
+}
+
+/** PDF из lastSkiaPicture (запись после renderPixiObjectsToSkia). */
+export const exportSkiaCanvasToPdf = async (filename = 'skia-export.pdf') => {
+    if (!CanvasKit || !skiaCanvas) {
+        const ok = await initSkia()
+        if (!ok || !CanvasKit || !skiaCanvas) {
+            return
+        }
+    }
+
+    if (!lastSkiaPicture) {
+        console.warn('Нет SkPicture — сначала вызовите renderPixiObjectsToSkia')
+        return
+    }
+
+    if (!CanvasKit!.PdfDocument) {
+        console.error('PdfDocument нет — нужен libs/canvaskit.js с skia_enable_pdf')
+        return
+    }
+
+    const w = skiaCanvas!.width
+    const h = skiaCanvas!.height
+    const pdf = new CanvasKit!.PdfDocument!('export')
+    const pdfCanvas = pdf.beginPage(w, h)
+    pdfCanvas.drawPicture(lastSkiaPicture)
+    pdf.endPage()
+    const bytes = pdf.close()
+    pdf.delete()
+
+    const blob = new Blob([bytes], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
 }
