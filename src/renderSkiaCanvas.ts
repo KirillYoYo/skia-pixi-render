@@ -172,29 +172,6 @@ export const getGraphicsAndSpritesFlat = (container: PIXI.Container): SkiaRender
     return result
 }
 
-// Опционально: ресайз canvas при изменении окна
-export const resizeSkiaCanvas = async () => {
-    if (!skiaCanvas || !surface || !CanvasKit) return
-
-    const newWidth = window.innerWidth / 2 - 20
-    const newHeight = window.innerHeight / 2 - 20
-
-    skiaCanvas.width = newWidth
-    skiaCanvas.height = newHeight
-    skiaCanvas.style.width = `${newWidth}px`
-    skiaCanvas.style.height = `${newHeight}px`
-
-    // Пересоздаём surface с новым размером
-    const newSurface = CanvasKit.MakeWebGLCanvasSurface(skiaCanvas)
-    if (newSurface) {
-        surface.delete()
-        surface = newSurface
-
-        // Перерисовываем контент
-        await renderSkiaCanvas()
-    }
-}
-
 // Внешняя функция для глобальной проверки
 export const checkSkiaMemoryLeaks = () => {
     const stats = skiaRegistry.checkRemainingObjects()
@@ -311,6 +288,7 @@ function paintPixiGraphicsOnCanvas(
 
         if (fillStyle && fillStyle.visible && fillStyle.color !== undefined) {
             const fillPaint = createFillPaint(CanvasKit, fillStyle)
+            fillPaint.setAlphaf(fillStyle.alpha)
             drawShape(shape, canvas, fillPaint, CanvasKit)
             fillPaint.delete()
         }
@@ -322,6 +300,7 @@ function paintPixiGraphicsOnCanvas(
             lineStyle.width > 0
         ) {
             const strokePaint = createStrokePaint(CanvasKit, lineStyle)
+            strokePaint.setAlphaf(lineStyle.alpha)
             drawShape(shape, canvas, strokePaint, CanvasKit)
             strokePaint.delete()
         }
@@ -566,7 +545,6 @@ function drawShape(shape: any, canvas: Canvas, paint: any, CanvasKit: CanvasKit)
                 pathBuilder.lineTo(points[i], points[i + 1])
             }
 
-            pathBuilder.close()
             const path = pathBuilder.detach()
             canvas.drawPath(path, paint)
             path.delete()

@@ -1,6 +1,6 @@
-import { initPixiCanvas, renderCanvases, resizePixiCanvas } from '@/renderPixiCanvas'
-import { exportSkiaCanvasToPdf, resizeSkiaCanvas } from '@/renderSkiaCanvas'
-import { getPixiContent } from '@/pixiContent'
+import { initPixiCanvas, renderCanvases } from '@/renderPixiCanvas'
+import { exportSkiaCanvasToPdf } from '@/renderSkiaCanvas'
+import { getPixiContent, getRandomizedPixiContent } from '@/pixiContent'
 ;(async () => {
     initPixiCanvas()
     const content = await getPixiContent()
@@ -10,8 +10,12 @@ import { getPixiContent } from '@/pixiContent'
         void exportSkiaCanvasToPdf()
     })
 
-    // window.addEventListener('resize', () => {
-    //     resizeSkiaCanvas()
-    //     resizePixiCanvas()
-    // })
+    document.getElementById('render-random')?.addEventListener('click', () => {
+        renderRandomObjects()
+    })
+
+    async function renderRandomObjects() {
+        const content = await getRandomizedPixiContent()
+        renderCanvases(content)
+    }
 })()
