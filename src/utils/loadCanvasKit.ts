@@ -1,11 +1,9 @@
 import type { CanvasKit } from 'canvaskit-wasm'
 
-import canvaskitJsUrl from '../libs/canvaskit.js?url'
-import canvaskitWasmUrl from '../libs/canvaskit.wasm?url'
+import canvaskitJsUrl from '../../libs/canvaskit.js?url'
+import canvaskitWasmUrl from '../../libs/canvaskit.wasm?url'
 
-type CanvasKitInitFn = (options?: {
-    locateFile?: (file: string) => string
-}) => Promise<CanvasKit>
+type CanvasKitInitFn = (options?: { locateFile?: (file: string) => string }) => Promise<CanvasKit>
 
 type WindowWithCanvasKit = Window & { CanvasKitInit?: CanvasKitInitFn }
 

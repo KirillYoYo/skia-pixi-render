@@ -1,6 +1,6 @@
 import { initPixiCanvas, renderCanvases } from '@/renderPixiCanvas'
 import { exportSkiaCanvasToPdf } from '@/renderSkiaCanvas'
-import { getPixiContent, getRandomizedPixiContent } from '@/pixiContent'
+import { getPixiContent, getRandomizedPixiContent } from '@/utils/pixiContent'
 ;(async () => {
     initPixiCanvas()
     const content = await getPixiContent()

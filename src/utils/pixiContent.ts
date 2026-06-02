@@ -50,6 +50,16 @@ export const getPixiContent = async () => {
     mainContainer.addChild(g1, g2, subContainer)
     mainContainer.addChild(anotherContainer)
 
+    const basicText = new PIXI.Text('Hello Skia!', {
+        fontFamily: 'Arial',
+        fontSize: 24,
+        fill: 0xff1010,
+        align: 'center',
+        lineHeight: 24,
+    })
+    basicText.position.set(50, 50)
+    mainContainer.addChild(basicText)
+
     return mainContainer
 }
 
@@ -78,11 +88,7 @@ export const getRandomizedPixiContent = async () => {
     if (Math.random() > 0.5) {
         // 50% шанс добавить спрайт
         try {
-            const imagePaths = [
-                '/AID_00100_11zon.jpg',
-                '/AID_00101_11zon.jpg',
-                '/AID_00102_11zon.jpg',
-            ]
+            const imagePaths = ['/AID_00100_11zon.jpg']
             const randomImage = imagePaths[Math.floor(Math.random() * imagePaths.length)]
             const texture = await PIXI.Assets.load(randomImage)
             spriteAid = new PIXI.Sprite(texture)

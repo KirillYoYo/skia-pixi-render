@@ -18,7 +18,8 @@
     "paths": {
       "@/*": [
         "./src/*"
-      ]
+      ],
+      "@libs/*": ["./libs/*"]
     },
     "outDir": "./dist",
     "declaration": true,

@@ -19,6 +19,9 @@ export const renderCanvases = async (pixiContainer: PIXI.Container) => {
             requestAnimationFrame(() => resolve())
         })
     }
+    /**
+     * ждем рендер пикси чтобы получить правильные Path (PIXI.SHAPES.POLY)
+     * **/
     await waitForRender()
     renderPixiObjectsToSkia(getGraphicsAndSpritesFlat(pixiContainer))
 }
