@@ -137,13 +137,10 @@ function recordSkiaPicture(pixiObjects: SkiaRenderable) {
 
     recordCanvas.clear(CanvasKit.WHITE)
 
-    pixiObjects.forEach(data => {
-        const { pixiObject, offset } = data
-        if (pixiObject instanceof PIXI.Graphics) {
-            paintPixiGraphicsOnCanvas(pixiObject, CanvasKit as CanvasKit, recordCanvas, offset)
-        } else if (pixiObject instanceof PIXI.Sprite) {
-            renderPixiSprite(pixiObject, CanvasKit as CanvasKit, recordCanvas, offset)
-        }
+    const rendererFactory = new PixiRendererFactory(CanvasKit as CanvasKit, recordCanvas)
+
+    pixiObjects.forEach(({ pixiObject, offset }) => {
+        rendererFactory.render(pixiObject, offset)
     })
 
     const picture = recorder.finishRecordingAsPicture()
