@@ -9,7 +9,7 @@ type WindowWithCanvasKit = Window & { CanvasKitInit?: CanvasKitInitFn }
 
 let loadPromise: Promise<CanvasKitInitFn> | null = null
 
-/** Classic script load — Emscripten exposes global CanvasKitInit. */
+// загрузка кастомной сборки Skia
 export function loadCanvasKitInit(): Promise<CanvasKitInitFn> {
     if (loadPromise) {
         return loadPromise

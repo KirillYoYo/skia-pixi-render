@@ -7,7 +7,8 @@
     "start": "npm run dev",
     "build": "vite build",
     "lint": "eslint src",
-    "dev": "vite"
+    "dev": "vite",
+    "docs": "typedoc --entryPointStrategy expand ./src --out docs"
   },
   "dependencies": {
     "canvaskit-wasm": "^0.41.1",
@@ -17,12 +18,15 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.9.1",
     "eslint": "^9.21.0",
     "eslint-config-prettier": "^10.1.2",
     "eslint-import-resolver-typescript": "^4.4.4",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-prettier": "^5.2.6",
     "prettier": "^3.5.3",
+    "typedoc": "^0.28.19",
     "typescript": "~5.7.3",
     "typescript-eslint": "^8.25.0",
     "vite": "^6.2.0"

@@ -4,7 +4,7 @@ import { addClickableArea, skiaRegistry } from '@/utils/InitSkia'
 import { getPixiAttributes } from '@/utils/skiaHelpers'
 import { ClickableArea, PixiObject, PixiTransformAttributes } from '@/types'
 import { Sprite } from 'pixi.js-legacy'
-// Создаем mapper для типов объектов
+// Фабрика по генерации рендер функций для разных обьектов
 export class PixiRendererFactory {
     private renderers = new Map<Function, Function>()
 

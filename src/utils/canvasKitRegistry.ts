@@ -1,6 +1,7 @@
 import { CanvasKit, Paint, Path, Rect } from 'canvaskit-wasm'
 import * as PIXI from 'pixi.js-legacy'
 
+// Кит для слежения и удаления не удаляемых сборщиком мусора обьектов из Skia
 export class CanvasKitRegistry implements ICanvasKitRegistry {
     private registry: Set<any> = new Set()
     private CanvasKit: CanvasKit | null = null
