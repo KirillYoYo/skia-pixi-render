@@ -42,40 +42,26 @@ html, body {
 #skia-canvas {
     grid-column: 2 / 3; /* правая колонка */
     grid-row: 2;        /* нижняя строка */
+    position: relative;
 }
 
 #side-bar {
-    width: 100%;
     padding: 20px;
+    box-sizing: border-box;
 
     button {
         padding: 10px 5px;
         width: 100%;
+        box-sizing: border-box;
         margin-bottom: 20px;
     }
 }
 
-.canvas-label {
-    margin: 10px;
-}
+.canvas-label {}
 
 
-@media (min-width: 1200px) {
-    .app-inner {
-        grid-template-columns: 1fr 1fr 1fr; /* 3 столбца: 1 | 2 | 3 */
-        grid-template-rows: 1fr;            /* 1 строка */
-    }
-
-    #side-bar {
-        grid-column: 1 / 2;
-        grid-row: 1;
-    }
-    #pixi-canvas {
-        grid-column: 2 / 3;
-        grid-row: 1;
-    }
-    #skia-canvas {
-        grid-column: 3 / 4;
-        grid-row: 1;
-    }
+#loading {
+    position: absolute;
+    top: 100px;
+    left: 300px;
 }

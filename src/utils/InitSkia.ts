@@ -5,6 +5,7 @@ import { CanvasKitRegistry } from '@/utils/canvasKitRegistry'
 import { getCanvasKitWasmUrl, loadCanvasKitInit } from '@/utils/loadCanvasKit'
 import { globalToLocal, pointInShape } from '@/utils/skiaHelpers'
 import * as PIXI from 'pixi.js-legacy'
+import { canvasHeight, canvasWidth } from '@/renderPixiCanvas'
 
 // Глобальные переменные (как у вас, но в отдельном файле)
 let surface: Surface | null = null
@@ -13,10 +14,6 @@ let skiaCanvas: HTMLCanvasElement | null = null
 let lastSkiaPicture: SkPicture | null = null
 
 export const skiaRegistry = CanvasKitRegistry.getInstance()
-
-// Параметры canvas
-const canvasWidth = window.innerWidth / 2 - 20
-const canvasHeight = window.innerHeight / 2 - 20
 
 // Глобальный массив кликабельных областей
 export const clickableAreas: ClickableArea[] = []

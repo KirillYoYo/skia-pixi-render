@@ -9,7 +9,7 @@ export const getPixiContent = async () => {
     const g4 = new PIXI.Graphics()
     const g5 = new PIXI.Graphics()
 
-    const texture = await PIXI.Assets.load('/AID_00100_11zon.jpg')
+    const texture = await PIXI.Assets.load('AID_00100_11zon.jpg')
     const spriteAid = new PIXI.Sprite(texture)
     spriteAid.position.set(-100, 0)
     spriteAid.scale.set(0.3, 0.3)
@@ -88,7 +88,7 @@ export const getRandomizedPixiContent = async () => {
     if (Math.random() > 0.5) {
         // 50% шанс добавить спрайт
         try {
-            const imagePaths = ['/AID_00100_11zon.jpg']
+            const imagePaths = ['AID_00100_11zon.jpg']
             const randomImage = imagePaths[Math.floor(Math.random() * imagePaths.length)]
             const texture = await PIXI.Assets.load(randomImage)
             spriteAid = new PIXI.Sprite(texture)

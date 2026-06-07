@@ -1,15 +1,22 @@
 import * as PIXI from 'pixi.js-legacy'
 import { getGraphicsAndSpritesFlat, renderPixiObjectsToSkia } from '@/renderSkiaCanvas'
 
+export const canvasWidth = window.innerWidth / 1.5 - 20
+export const canvasHeight = window.innerHeight / 2 - 20
+
 // 1) Создаём Application и указываем, чтобы canvas помещался в наш div
 const app = new PIXI.Application({
-    width: window.innerWidth / 2 - 20,
-    height: window.innerHeight / 2 - 20,
+    width: canvasWidth,
+    height: canvasHeight,
     backgroundColor: 0xffffff,
     forceCanvas: true,
 })
 
 export const renderCanvases = async (pixiContainer: PIXI.Container) => {
+    const loadingDom = document.querySelector('#loading') as HTMLElement | undefined
+    if (loadingDom) {
+        loadingDom.style.display = 'block'
+    }
     app.stage.removeChildren()
     app.stage.addChild(pixiContainer)
 
@@ -23,6 +30,9 @@ export const renderCanvases = async (pixiContainer: PIXI.Container) => {
      * ждем рендер пикси чтобы получить правильные Path (PIXI.SHAPES.POLY)
      * **/
     await waitForRender()
+    if (loadingDom) {
+        loadingDom.style.display = 'none'
+    }
     renderPixiObjectsToSkia(getGraphicsAndSpritesFlat(pixiContainer))
 }
 
