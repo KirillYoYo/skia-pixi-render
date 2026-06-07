@@ -30,10 +30,10 @@ export const renderCanvases = async (pixiContainer: PIXI.Container) => {
      * ждем рендер пикси чтобы получить правильные Path (PIXI.SHAPES.POLY)
      * **/
     await waitForRender()
+    await renderPixiObjectsToSkia(getGraphicsAndSpritesFlat(pixiContainer))
     if (loadingDom) {
         loadingDom.style.display = 'none'
     }
-    renderPixiObjectsToSkia(getGraphicsAndSpritesFlat(pixiContainer))
 }
 
 export function initPixiCanvas() {
