@@ -1,5 +1,4 @@
 import * as PIXI from 'pixi.js-legacy'
-import { ObservablePoint } from 'pixi.js'
 import { Canvas } from 'canvaskit-wasm'
 
 export type PixiObject = PIXI.Graphics | PIXI.Sprite | PIXI.Text
@@ -11,8 +10,8 @@ export type SkiaRenderable = Array<{
 
 export interface PixiTransformAttributes {
     angle: number
-    scale: ObservablePoint<any>
-    position: ObservablePoint<any>
+    scale: PIXI.ObservablePoint<any>
+    position: PIXI.ObservablePoint<any>
     alpha?: number
 }
 
